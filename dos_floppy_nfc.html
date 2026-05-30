@@ -1,0 +1,381 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  #dos-root {
+    font-family: 'Share Tech Mono', monospace;
+    background: #000;
+    color: #aaa;
+    min-height: 520px;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .scanlines {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.18) 3px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .green { color: #33ff33; }
+  .bright { color: #ffffff; font-weight: bold; }
+  .yellow { color: #ffff33; }
+  .cyan { color: #33ffff; }
+  .red { color: #ff4444; }
+  .gray { color: #888; }
+
+  #screen { position: relative; z-index: 1; }
+
+  .line { min-height: 1.5em; }
+
+  #input-row {
+    display: flex;
+    align-items: center;
+    margin-top: 4px;
+  }
+
+  #prompt { color: #33ff33; white-space: nowrap; }
+
+  #cmd-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #33ff33;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    flex: 1;
+    caret-color: #33ff33;
+    margin-left: 2px;
+  }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: #33ff33;
+    animation: blink 0.7s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .progress-bar {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .hidden { display: none; }
+
+  #cmd-input:focus { outline: none; }
+
+  .box-border {
+    border: 1px solid #555;
+    padding: 8px 12px;
+    margin: 8px 0;
+    color: #ccc;
+  }
+
+  .title-bar {
+    text-align: center;
+    background: #0000aa;
+    color: #fff;
+    padding: 2px 8px;
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+    font-size: 13px;
+  }
+</style>
+
+<div id="dos-root">
+  <div class="scanlines"></div>
+  <div id="screen"></div>
+  <div id="input-row" class="hidden">
+    <span id="prompt" class="green">C:\&gt;&nbsp;</span>
+    <input id="cmd-input" type="text" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="60">
+  </div>
+</div>
+
+<script>
+const screen = document.getElementById('screen');
+const inputRow = document.getElementById('input-row');
+const cmdInput = document.getElementById('cmd-input');
+
+function line(html, cls='') {
+  const d = document.createElement('div');
+  d.className = 'line ' + cls;
+  d.innerHTML = html || '&nbsp;';
+  screen.appendChild(d);
+  return d;
+}
+
+function clr() { screen.innerHTML = ''; }
+
+const bootSeq = [
+  { t: 0,    html: '<span class="bright">MS-DOS Version 6.22</span>' },
+  { t: 300,  html: '<span class="gray">Copyright (C) Microsoft Corp 1981-1994</span>' },
+  { t: 500,  html: '&nbsp;' },
+  { t: 600,  html: 'Loading HIMEM.SYS ...<span class="green"> OK</span>' },
+  { t: 900,  html: 'Loading EMM386.EXE ...<span class="green"> OK</span>' },
+  { t: 1100, html: 'Loading MOUSE.COM ...<span class="green"> OK</span>' },
+  { t: 1300, html: '&nbsp;' },
+  { t: 1400, html: '<span class="yellow">640K</span> conventional memory' },
+  { t: 1550, html: '<span class="yellow">15360K</span> extended (XMS) memory' },
+  { t: 1700, html: '&nbsp;' },
+  { t: 1800, html: 'Starting <span class="bright">MS-DOS</span>...' },
+  { t: 2200, html: '&nbsp;' },
+  { t: 2400, html: '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ <span class="green">100%</span>' },
+  { t: 2800, html: '&nbsp;' },
+  { t: 3000, html: '<span class="cyan">╔══════════════════════════════╗</span>' },
+  { t: 3050, html: '<span class="cyan">║</span>   <span class="bright">WITAJ W SYSTEMIE DOS!</span>     <span class="cyan">║</span>' },
+  { t: 3100, html: '<span class="cyan">║</span>  <span class="gray">Wpisz HELP aby zobaczyć</span>      <span class="cyan">║</span>' },
+  { t: 3150, html: '<span class="cyan">║</span>  <span class="gray">dostępne komendy.</span>            <span class="cyan">║</span>' },
+  { t: 3200, html: '<span class="cyan">╚══════════════════════════════╝</span>' },
+  { t: 3300, html: '&nbsp;' },
+];
+
+bootSeq.forEach(({t, html}) => {
+  setTimeout(() => line(html), t);
+});
+
+setTimeout(() => {
+  inputRow.classList.remove('hidden');
+  cmdInput.focus();
+}, 3500);
+
+const cmds = {
+  help: () => [
+    '&nbsp;',
+    '<span class="yellow">Dostępne komendy:</span>',
+    '&nbsp;',
+    '  <span class="bright">DIR</span>      - wyświetl zawartość dysku',
+    '  <span class="bright">VER</span>      - wersja systemu',
+    '  <span class="bright">TIME</span>     - aktualny czas',
+    '  <span class="bright">DATE</span>     - aktualna data',
+    '  <span class="bright">SNAKE</span>    - zagraj w węża',
+    '  <span class="bright">POEM</span>     - wiersz o dyskietce',
+    '  <span class="bright">FORMAT</span>  - formatuj dyskietkę <span class="red">(NIEBEZPIECZNE!)</span>',
+    '  <span class="bright">CLS</span>      - wyczyść ekran',
+    '  <span class="bright">HELP</span>     - ta pomoc',
+    '&nbsp;',
+  ],
+  dir: () => {
+    const now = new Date();
+    const d = now.toLocaleDateString('pl-PL');
+    const t = now.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'});
+    return [
+      '&nbsp;',
+      ' Katalog C:\\DOS',
+      '&nbsp;',
+      ` ${d}  ${t}    &lt;DIR&gt;          .`,
+      ` ${d}  ${t}    &lt;DIR&gt;          ..`,
+      ` ${d}  ${t}        1 474 560  DYSKIETKA.NFC`,
+      ` ${d}  ${t}           65 536  COMMAND.COM`,
+      ` ${d}  ${t}           32 768  AUTOEXEC.BAT`,
+      ` ${d}  ${t}           16 384  CONFIG.SYS`,
+      ` ${d}  ${t}       12 648 430  SEKRET.TXT`,
+      '&nbsp;',
+      '         5 plików      <span class="yellow">14 237 678</span> bajtów',
+      '         2 katalogi  <span class="green">349 524 992</span> bajtów wolnych',
+      '&nbsp;',
+    ];
+  },
+  ver: () => [
+    '&nbsp;',
+    'MS-DOS Version <span class="bright">6.22</span>',
+    'Zainstalowana na: <span class="yellow">DYSKIETKA 3.5" (wydruk 3D)</span>',
+    'Tag NFC: <span class="cyan">NTAG213 – 144 bajty</span>',
+    '&nbsp;',
+  ],
+  time: () => {
+    const t = new Date().toLocaleTimeString('pl-PL');
+    return ['&nbsp;', `Aktualny czas: <span class="bright">${t}</span>`, '&nbsp;'];
+  },
+  date: () => {
+    const days = ['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
+    const now = new Date();
+    const d = now.toLocaleDateString('pl-PL');
+    const dn = days[now.getDay()];
+    return ['&nbsp;', `Dzisiaj jest: <span class="bright">${dn}, ${d}</span>`, '&nbsp;'];
+  },
+  poem: () => [
+    '&nbsp;',
+    '<span class="cyan">╔════════════════════════════╗</span>',
+    '<span class="cyan">║</span>   <span class="yellow">ODA DO DYSKIETKI</span>         <span class="cyan">║</span>',
+    '<span class="cyan">╠════════════════════════════╣</span>',
+    '<span class="cyan">║</span>                            <span class="cyan">║</span>',
+    '<span class="cyan">║</span>  Mała, czarna, 1.44 MB,    <span class="cyan">║</span>',
+    '<span class="cyan">║</span>  nosiłam systemy i gry.    <span class="cyan">║</span>',
+    '<span class="cyan">║</span>  Dziś z NFC w środku tkwię,<span class="cyan">║</span>',
+    '<span class="cyan">║</span>  w XXI wiek patrzę złą.    <span class="cyan">║</span>',
+    '<span class="cyan">║</span>                            <span class="cyan">║</span>',
+    '<span class="cyan">╚════════════════════════════╝</span>',
+    '&nbsp;',
+  ],
+  format: () => null,
+  cls: () => null,
+  snake: () => null,
+};
+
+let formatStep = 0;
+let snakeActive = false;
+
+cmdInput.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const raw = cmdInput.value.trim();
+  const cmd = raw.toLowerCase();
+  cmdInput.value = '';
+
+  line(`<span class="green">C:\\&gt;</span> <span class="bright">${raw || '&nbsp;'}</span>`);
+
+  if (!cmd) return;
+
+  if (cmd === 'cls') { clr(); return; }
+
+  if (cmd === 'format') {
+    formatStep = 1;
+    line('&nbsp;');
+    line('<span class="red">OSTRZEŻENIE: Formatowanie zniszczy wszystkie dane!</span>');
+    line('Wpisz <span class="bright">TAK</span> aby kontynuować lub <span class="bright">NIE</span> aby anulować:');
+    line('&nbsp;');
+    return;
+  }
+
+  if (formatStep === 1) {
+    if (cmd === 'tak') {
+      formatStep = 0;
+      line('&nbsp;');
+      line('Formatowanie dyskietki A: ...');
+      setTimeout(() => line('██░░░░░░░░░░░░░░░░░░  10%'), 300);
+      setTimeout(() => line('████████░░░░░░░░░░░░  40%'), 800);
+      setTimeout(() => line('████████████░░░░░░░░  60%'), 1300);
+      setTimeout(() => {
+        line('<span class="red">BŁĄD KRYTYCZNY: Nie można sformatować dyskietki!</span>');
+        line('<span class="red">Dyskietka jest LEGENDARNA i chroniona przed zapisem!</span>');
+        line('<span class="yellow">FORMAT przerwany. System stabilny.</span>');
+        line('&nbsp;');
+      }, 1800);
+    } else {
+      formatStep = 0;
+      line('Formatowanie anulowane.');
+      line('&nbsp;');
+    }
+    return;
+  }
+
+  if (cmd === 'snake') {
+    startSnake();
+    return;
+  }
+
+  const fn = cmds[cmd];
+  if (fn) {
+    const out = fn();
+    if (out) out.forEach(h => line(h));
+  } else {
+    line('&nbsp;');
+    line(`Nieznana komenda: <span class="red">${raw}</span>`);
+    line('Wpisz <span class="bright">HELP</span> aby zobaczyć listę komend.');
+    line('&nbsp;');
+  }
+
+  screen.scrollTop = screen.scrollHeight;
+});
+
+function startSnake() {
+  line('&nbsp;');
+  line('<span class="yellow">Uruchamianie SNAKE.EXE ...</span>');
+  line('&nbsp;');
+
+  setTimeout(() => {
+    snakeActive = true;
+    const W = 20, H = 14;
+    let snake = [{x:10,y:7},{x:9,y:7},{x:8,y:7}];
+    let dir = {x:1,y:0};
+    let food = {x:15,y:5};
+    let score = 0;
+    let alive = true;
+
+    function randFood() {
+      let pos;
+      do { pos = {x: Math.floor(Math.random()*W), y: Math.floor(Math.random()*H)}; }
+      while (snake.some(s=>s.x===pos.x&&s.y===pos.y));
+      return pos;
+    }
+
+    const container = document.createElement('div');
+    container.style.cssText = 'font-size:13px;line-height:1.3;margin:4px 0;';
+    const scoreEl = document.createElement('div');
+    scoreEl.innerHTML = '<span class="cyan">SNAKE — Wynik: </span><span id="snk-score" class="bright">0</span>  <span class="gray">WASD/strzałki | Q=quit</span>';
+    container.appendChild(scoreEl);
+    const grid = document.createElement('div');
+    grid.style.cssText = 'border:1px solid #555;display:inline-block;margin-top:4px;';
+    container.appendChild(grid);
+    screen.appendChild(container);
+
+    function render() {
+      let html = '';
+      for(let y=0;y<H;y++){
+        for(let x=0;x<W;x++){
+          if(snake[0].x===x&&snake[0].y===y) html+='<span class="bright">@</span>';
+          else if(snake.some(s=>s.x===x&&s.y===y)) html+='<span class="green">█</span>';
+          else if(food.x===x&&food.y===y) html+='<span class="red">●</span>';
+          else html+='<span class="gray">·</span>';
+        }
+        html+='<br>';
+      }
+      grid.innerHTML = html;
+      document.getElementById('snk-score').textContent = score;
+    }
+
+    function step() {
+      if(!alive) return;
+      const head = {x: snake[0].x+dir.x, y: snake[0].y+dir.y};
+      if(head.x<0||head.x>=W||head.y<0||head.y>=H||snake.some(s=>s.x===head.x&&s.y===head.y)){
+        alive = false;
+        grid.innerHTML += '<br><span class="red">GAME OVER!</span> Wynik: <span class="bright">'+score+'</span><br>';
+        snakeActive = false;
+        line('&nbsp;');
+        return;
+      }
+      snake.unshift(head);
+      if(head.x===food.x&&head.y===food.y){ score++; food=randFood(); }
+      else snake.pop();
+      render();
+      setTimeout(step, 160);
+    }
+
+    document.addEventListener('keydown', function snkKey(e) {
+      if(!snakeActive){ document.removeEventListener('keydown', snkKey); return; }
+      const map = {ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},
+        w:{x:0,y:-1},s:{x:0,y:1},a:{x:-1,y:0},d:{x:1,y:0}};
+      if(map[e.key]){
+        const nd=map[e.key];
+        if(nd.x!==-dir.x||nd.y!==-dir.y) dir=nd;
+        e.preventDefault();
+      }
+      if(e.key==='q'||e.key==='Q'){ alive=false; snakeActive=false; line('Wyjście z gry.'); line('&nbsp;'); document.removeEventListener('keydown', snkKey); }
+    });
+
+    render();
+    setTimeout(step, 200);
+  }, 800);
+}
+
+screen.addEventListener('click', () => cmdInput.focus());
+document.getElementById('dos-root').addEventListener('click', () => cmdInput.focus());
+</script>
